@@ -1,80 +1,54 @@
 const analyzeTarget = async (target) => {
 
-    const analysis = {
-        target,
-        type: "unknown",
-        confidence: 0,
-        attack_surface: [],
-        risk_level: "low",
-        suggested_tools: []
-    };
+    // CALL PYTHON AI (if running)
+    try {
+        const res = await fetch("http://127.0.0.1:8000/analyze", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ target })
+        });
 
-    const isUrl = target.includes(".") || target.startsWith("http");
+        return await res.json();
 
-    const isPrivateIP =
-        target.startsWith("192.168") ||
-        target.startsWith("10.") ||
-        target.startsWith("172.");
+    } catch (err) {
+        // fallback if AI not running
+        return {
+            target,
+            type: "web",
+            suggested_tools: ["nmap", "nuclei"]
+        };
+    }
+};
 
-    const hasSensitiveKeywords =
-        ["admin", "login", "api", "dashboard", "auth"].some(k =>
-            target.toLowerCase().includes(k)
-        );
 
-const { parseNmap } = require("../../../ai-engine/utils/nmap_parser");
-
+// 🔥 DUMMY NMAP (NO PYTHON IMPORT)
 const runNmap = async (target) => {
-
-    const rawOutput = await executeNmap(target); // your existing logic
-
-    return parseNmap(rawOutput);
+    return {
+        open_ports: [
+            { port: 80, service: "http" },
+            { port: 443, service: "https" }
+        ]
+    };
 };
 
-const { parseNuclei } = require("../../../ai-engine/utils/nuclei_parser");
 
+// 🔥 DUMMY NUCLEI
 const runNuclei = async (target) => {
-
-    const rawOutput = await executeNuclei(target); // your existing logic
-
-    return parseNuclei(rawOutput);
+    return {
+        vulnerabilities: [
+            {
+                severity: "medium",
+                finding: "Sample vulnerability"
+            }
+        ]
+    };
 };
 
-    // -----------------------------
-    // TYPE DETECTION
-    // -----------------------------
-    if (isUrl) {
-        analysis.type = "web";
-        analysis.attack_surface.push("web_application");
-        analysis.suggested_tools.push("nmap", "nuclei");
-    }
-
-    if (isPrivateIP) {
-        analysis.type = "internal_network";
-        analysis.attack_surface.push("internal_network");
-        analysis.suggested_tools.push("nmap");
-    }
-
-    // -----------------------------
-    // RISK SCORING ENGINE
-    // -----------------------------
-    let riskScore = 0;
-
-    if (hasSensitiveKeywords) riskScore += 2;
-    if (isUrl) riskScore += 1;
-    if (isPrivateIP) riskScore += 2;
-
-    if (riskScore >= 3) analysis.risk_level = "high";
-    else if (riskScore === 2) analysis.risk_level = "medium";
-    else analysis.risk_level = "low";
-
-    // -----------------------------
-    // CONFIDENCE SCORE
-    // -----------------------------
-    analysis.confidence = Math.min(95, riskScore * 30);
-
-    return analysis;
-};
 
 module.exports = {
-    analyzeTarget
+    analyzeTarget,
+    runNmap,
+    runNuclei
 };
