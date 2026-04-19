@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+from brain import decide_attacks
 import subprocess
 
 app = FastAPI(title="Sentinels AI Engine", version="1.0")
@@ -11,6 +12,13 @@ app = FastAPI(title="Sentinels AI Engine", version="1.0")
 class Target(BaseModel):
     target: str
 
+
+@app.post("/brain")
+def brain(data: dict):
+    vulns = data.get("vulnerabilities", [])
+    return {
+        "actions": decide_attacks(vulns)
+    }
 
 # -----------------------------
 # AI ANALYSIS LAYER
@@ -77,7 +85,7 @@ def run_nmap(data: Target):
 @app.post("/scan/nuclei")
 def run_nuclei(data: Target):
     try:
-        cmd = ["nuclei", "-u", data.target, "-silent"]
+        cmd = ["nuclei", "-u", data.target, "-json", "-severity", "low,medium,high,critical", "-timeout", "10"]
 
         result = subprocess.run(
             cmd,
@@ -85,7 +93,16 @@ def run_nuclei(data: Target):
             text=True
         )
 
-        output = result.stdout.split("\n") if result.stdout else []
+        # output = result.stdout.split("\n") if result.stdout else []
+        import json
+
+        output = []
+        if result.stdout:
+          for line in result.stdout.splitlines():
+             try:
+                output.append(json.loads(line))
+             except:
+                pass
 
         return {
             "tool": "nuclei",
@@ -117,6 +134,7 @@ def analyze(data: Target):
         result["suggested_tools"].append("nmap")
         result["suggested_tools"].append("nuclei")
 
+        
     # LOCAL NETWORK DETECTION
     if "192.168" in target or "10." in target:
         result["attack_surface"].append("internal_network")
