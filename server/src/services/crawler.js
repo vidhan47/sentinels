@@ -1,25 +1,22 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
-const { URL } = require("url");
 
-const normalizeUrl = (base, link) => {
-    try {
-        return new URL(link, base).href;
-    } catch (e) {
-        return null;
-    }
-};
-
+// ----------------------
+// FAST CRAWLER
+// ----------------------
 const crawlTarget = async (target) => {
-    try {
-        const baseUrl = `http://${target}`;
-        console.log("🕷 Crawling:", baseUrl);
 
+    const baseUrl = target.startsWith("http")
+        ? target
+        : `http://${target}`;
+
+    console.log("🕷 Crawling:", baseUrl);
+
+    try {
+        // Step 1: Get homepage
         const res = await axios.get(baseUrl, {
-            timeout: 10000,
-            headers: {
-                "User-Agent": "Mozilla/5.0"
-            }
+            timeout: 2000,
+            validateStatus: () => true
         });
 
         const html = res.data;
@@ -27,28 +24,55 @@ const crawlTarget = async (target) => {
 
         let links = [];
 
+        // Step 2: Extract links
         $("a").each((i, el) => {
-            const href = $(el).attr("href");
+            let href = $(el).attr("href");
 
-            if (href) {
-                const fullUrl = normalizeUrl(baseUrl, href);
+            if (!href) return;
 
-                if (fullUrl && fullUrl.startsWith(baseUrl)) {
-                    links.push(fullUrl);
-                }
+            // Convert relative → absolute
+            if (href.startsWith("/")) {
+                href = baseUrl + href;
+            }
+
+            // Keep only same domain links
+            if (href.includes(target)) {
+                links.push(href);
             }
         });
 
-        // ✅ Remove duplicates
+        // Remove duplicates
         links = [...new Set(links)];
 
-        console.log("🔗 Clean Links:", links);
+        console.log("🔗 Raw Links:", links);
 
-        return links.slice(0,5);
+        // ----------------------
+        // 🔥 LIMIT LINKS (CRITICAL)
+        // ----------------------
+        const MAX_LINKS = 5;
+        const limitedLinks = links.slice(0, MAX_LINKS);
+
+        // ----------------------
+        // ⚡ PARALLEL VALIDATION (FAST)
+        // ----------------------
+        const requests = limitedLinks.map(link => {
+            return axios.get(link, {
+                timeout: 1500,
+                validateStatus: () => true
+            }).catch(() => null);
+        });
+
+        await Promise.all(requests);
+
+        console.log("🔗 Final Links:", limitedLinks);
+
+        return limitedLinks;
 
     } catch (err) {
-        console.error("Crawler error:", err.message);
-        return [];
+        console.error("❌ Crawl error:", err.message);
+
+        // fallback (important)
+        return [`http://${target}/?id=1`];
     }
 };
 

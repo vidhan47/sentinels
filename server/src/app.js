@@ -15,6 +15,6 @@ app.get("/", (req, res) => {
 });
 
 // API route
-app.use("/api/scan", scanRoutes);
+app.use("/api", scanRoutes);
 
 module.exports = app;
