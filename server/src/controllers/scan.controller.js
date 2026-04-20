@@ -94,14 +94,29 @@ const fullScan = async (req, res) => {
                             : 0
                     },
                     findings: Array.isArray(attackResults)
-                        ? attackResults.map(r => ({
+                    ? attackResults.map(r => {
+
+                        let severity = "LOW";
+
+                        if (r.vulnerable) {
+                            if (r.type === "sqli") {
+                                severity = "HIGH";
+                            } 
+                            else if (r.type === "xss") {
+                                severity = r.context === "stored" ? "HIGH" : "MEDIUM";
+                            }
+                        }
+
+                        return {
                             type: r.type,
                             status: r.vulnerable ? "VULNERABLE" : "SAFE",
+                            severity,
                             technique: r.technique || null,
                             parameter: r.param || null,
                             payload: r.payload || null
-                        }))
-                     : []
+                        };
+                    })
+                : []
                 };
 
                 console.log("📊 Final Report:", formattedResults);              

