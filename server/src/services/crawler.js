@@ -44,7 +44,7 @@ const crawlTarget = async (target) => {
 
         console.log("🔗 Clean Links:", links);
 
-        return links;
+        return links.slice(0,5);
 
     } catch (err) {
         console.error("Crawler error:", err.message);
