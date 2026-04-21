@@ -1,1 +1,13 @@
-fury.env
+node_modules/
+server/node_modules/
+client/node_modules/
+
+.env
+client/sentinel/.env
+
+__pycache__/
+dist/
+build/
+.vite/
+.cache/
+*.log

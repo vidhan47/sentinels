@@ -21,4 +21,13 @@ app.get("/", (req, res) => {
 // ✅ MOUNT ROUTES
 app.use("/api", scanRoutes);
 
-module.exports = app;
+
+const getPort = require("get-port").default;
+
+(async () => {
+  const PORT = await getPort({ port: 5000 });
+
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+  });
+})();

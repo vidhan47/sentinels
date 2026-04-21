@@ -16,6 +16,12 @@ const executeAttacks = require("../services/attackService");
 // ----------------------
 const fullScan = async (req, res) => {
     const { target } = req.body;
+    let cleanTarget = target;
+
+    // Fix double protocol issue
+    if (!cleanTarget.startsWith("http")) {
+    cleanTarget = "http://" + cleanTarget;
+    }
 
     if (!target || typeof target !== "string") {
         return res.status(400).json({
@@ -60,7 +66,7 @@ const fullScan = async (req, res) => {
             for (let tool of tools) {
                 try {
                     if (tool === "nmap") {
-                        results.nmap = await runNmap(target);
+                        results.nmap = await runNmap(cleanTarget);
                     }
                     if (tool === "nuclei") {
                         results.nuclei = await runNuclei(target) || { vulnerabilities: [] };

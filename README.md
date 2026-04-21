@@ -1,53 +1,10 @@
-# 🛡️ Sentinel AI – Automated AI-Powered Pentesting Platform
+# 🛡️ Sentinels - AI Powered Pentesting Tool
 
-Sentinel AI is an intelligent penetration testing platform that automates target analysis, vulnerability scanning, and risk assessment using AI-driven decision making.
-
----
-
-## 🚀 Features
-
-* 🧠 **AI-Powered Target Analysis**
-
-  * Automatically identifies target type (web, network, etc.)
-  * Suggests appropriate security tools (e.g., Nmap, Nuclei)
-
-* ⚙️ **Automated Scanning Pipeline**
-
-  * Runs scans asynchronously
-  * Supports modular tool integration
-
-* 📊 **Risk Assessment Engine**
-
-  * Generates risk score and severity level
-  * Provides structured scan summaries
-
-* 🔄 **Real-Time Scan Tracking**
-
-  * Track scan progress using `scanId`
-  * Fetch results via API
-
-* 🌐 **Full Stack Architecture**
-
-  * Backend: Node.js + Express
-  * Frontend: React (Vite)
+An AI-driven web security scanner that detects vulnerabilities like SQL Injection and XSS using automated analysis and attack simulation.
 
 ---
 
-## 📁 Project Structure
-
-```
-sentinels/
-│
-├── client/sentinel/     # React frontend (Vite)
-├── server/              # Express backend
-├── engine/              # AI + scanning logic
-├── package.json         # Root scripts
-└── README.md
-```
-
----
-
-## 🛠️ Installation
+## 🚀 Quick Start (One Command Setup)
 
 ### 1. Clone the repository
 
@@ -56,133 +13,85 @@ git clone https://github.com/vidhan47/sentinels.git
 cd sentinels
 ```
 
----
-
-### 2. Install all dependencies
+### 2. Install everything
 
 ```bash
-npm run install-all
+npm run setup
 ```
 
----
-
-## ▶️ Running the Project
+### 3. Start the application
 
 ```bash
 npm run start-all
 ```
 
-### 🌐 Access:
+---
 
-* Frontend → http://localhost:5173
-* Backend → http://localhost:5000
+## 🌐 Access the App
+
+* Frontend: http://localhost:5173
+* Backend: http://localhost:5000
 
 ---
 
-## 🔌 API Endpoints
+## 🧪 How to Test
 
-### 🔹 Start Full Scan
+Use this demo target:
 
 ```
-POST /api/full-scan
-```
-
-#### Body:
-
-```json
-{
-  "target": "example.com"
-}
-```
-
-#### Response:
-
-```json
-{
-  "success": true,
-  "scanId": "123456789"
-}
+https://demo.testfire.net
 ```
 
 ---
 
-### 🔹 Get Scan Status
+## ⚠️ Requirements
+
+* Node.js (v18 or higher recommended)
+* npm
+
+---
+
+## ❗ Troubleshooting
+
+### Port already in use
+
+If you see:
 
 ```
-GET /api/scan-status/:id
+EADDRINUSE: port 5000
 ```
 
-#### Response:
+Run:
 
-```json
-{
-  "success": true,
-  "scan": {
-    "stage": "completed",
-    "progress": 100,
-    "result": {
-      "target": "example.com",
-      "risk_score": 0,
-      "risk_level": "LOW",
-      "summary": {
-        "total": 2,
-        "vulnerabilities": 0
-      },
-      "findings": []
-    }
-  }
-}
+```bash
+npx kill-port 5000
 ```
 
 ---
 
-## ⚙️ Tech Stack
+## 📦 Project Structure
 
-| Layer     | Technology                        |
-| --------- | --------------------------------- |
-| Frontend  | React + Vite                      |
-| Backend   | Node.js + Express                 |
-| AI Engine | Custom Logic                      |
-| Tools     | Nmap, Nuclei (planned/integrated) |
-
----
-
-## 📌 Future Improvements
-
-* 🔍 Real vulnerability scanning with Nmap & Nuclei
-* 📈 Live progress UI (real-time updates)
-* 📊 Advanced reporting dashboard
-* 🔐 Authentication & user sessions
-* ☁️ Deployment (Docker / Cloud)
+```
+sentinels/
+│
+├── client/        # Frontend (Vite + React)
+├── server/        # Backend (Node.js + Express)
+├── engine/        # AI + attack logic
+```
 
 ---
 
-## ⚠️ Notes
+## ✨ Features
 
-* External tools like **Nmap** and **Nuclei** must be installed separately if enabled
-* Environment variables (if added later) should be stored in `.env`
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Feel free to fork the repo and submit a pull request.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License.
+* Automated target analysis
+* Web crawling
+* SQL Injection detection
+* XSS testing
+* Risk scoring system
+* Real-time scan progress
 
 ---
 
 ## 👨‍💻 Author
 
-**Vidhan**
-GitHub: https://github.com/vidhan47
-
----
-
-## ⭐ Support
-
-If you found this project useful, consider giving it a star ⭐
+Team Rocky
