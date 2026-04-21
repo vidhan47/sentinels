@@ -1,3 +1,5 @@
+const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+
 const {
     analyzeTarget,
     runNmap,
@@ -7,7 +9,6 @@ const {
 
 const { createScan, updateScan, getScan } = require("../utils/scanStore");
 const { crawlTarget } = require("../services/crawler");
-const { buildAttackGraph } = require("../graph/attackGraph");
 const executeAttacks = require("../services/attackService");
 
 // ----------------------
@@ -15,9 +16,6 @@ const executeAttacks = require("../services/attackService");
 // ----------------------
 const fullScan = async (req, res) => {
     const { target } = req.body;
-    const scanId = Date.now().toString();
-
-    createScan(scanId);
 
     if (!target || typeof target !== "string") {
         return res.status(400).json({
@@ -26,67 +24,115 @@ const fullScan = async (req, res) => {
         });
     }
 
+    const scanId = Date.now().toString();
+    createScan(scanId);
+
     console.log("🚀 Starting full scan for:", target);
 
-    // ✅ RETURN IMMEDIATELY (non-blocking)
+    // ✅ RETURN IMMEDIATELY
     res.json({
         success: true,
         scanId
     });
 
-    // 🔥 BACKGROUND EXECUTION STARTS HERE
+    // 🔥 BACKGROUND EXECUTION
     (async () => {
         try {
             const startTime = Date.now();
 
+            // ---------------- ANALYSIS ----------------
             updateScan(scanId, { stage: "analysis", progress: 10 });
 
-            const analysis = await analyzeTarget(target);
+            const analysis = await analyzeTarget(target) || {};
+            console.log("🧠 ANALYSIS:", analysis);
 
+            // ---------------- TOOLS ----------------
             updateScan(scanId, { stage: "tools", progress: 25 });
+            await sleep(1000);
 
             let results = {
                 nmap: null,
                 nuclei: { vulnerabilities: [] }
             };
 
-            for (let tool of analysis.suggested_tools || []) {
-                if (tool === "nmap") {
-                    results.nmap = await runNmap(target);
-                }
-                if (tool === "nuclei") {
-                    results.nuclei = await runNuclei(target);
+            const tools = analysis?.suggested_tools || [];
+
+            for (let tool of tools) {
+                try {
+                    if (tool === "nmap") {
+                        results.nmap = await runNmap(target);
+                    }
+                    if (tool === "nuclei") {
+                        results.nuclei = await runNuclei(target) || { vulnerabilities: [] };
+                    }
+                } catch (toolErr) {
+                    console.error(`⚠️ Tool failed: ${tool}`, toolErr.message);
                 }
             }
 
+            // ---------------- CRAWLING ----------------
             updateScan(scanId, { stage: "crawling", progress: 40 });
+            await sleep(1000);
 
-            const discoveredLinks = await crawlTarget(target);
+            let discoveredLinks = [];
+            try {
+                discoveredLinks = await crawlTarget(target) || [];
+            } catch (err) {
+                console.error("⚠️ Crawl failed:", err.message);
+            }
 
+            // ---------------- BRAIN ----------------
             updateScan(scanId, { stage: "brain", progress: 55 });
+            await sleep(1500);
 
-            const brain = await runBrain(results.nuclei.vulnerabilities);
+            let brain = {};
+            try {
+                brain = await runBrain(results.nuclei.vulnerabilities) || {};
+            } catch (err) {
+                console.error("⚠️ Brain failed:", err.message);
+            }
 
+            console.log("🧠 BRAIN ACTIONS:", brain);
+
+            // 🚨 FALLBACK ATTACKS
+            if (!brain.actions || brain.actions.length === 0) {
+                console.log("⚠️ No AI actions — injecting default attacks");
+
+                brain.actions = [
+                    { type: "sqli", technique: "basic" },
+                    { type: "xss", technique: "reflected" }
+                ];
+            }
+
+            // ---------------- ATTACKS ----------------
             updateScan(scanId, { stage: "attacks", progress: 75 });
+            await sleep(1500);
 
-            const attackResults = await executeAttacks(
-                brain.actions,
-                target,
-                discoveredLinks
-            );
+            let attackResults = [];
+            try {
+                attackResults =
+                    (await executeAttacks(
+                        brain.actions,
+                        target,
+                        discoveredLinks
+                    )) || [];
+            } catch (err) {
+                console.error("⚠️ Attack execution failed:", err.message);
+            }
 
+            console.log("💣 ATTACK RESULTS:", attackResults);
+
+            // ---------------- REPORT ----------------
             updateScan(scanId, { stage: "report", progress: 90 });
+            await sleep(1000);
 
-            // ✅ FINAL REPORT BUILD
             let riskScore = 0;
 
-            if (Array.isArray(attackResults)) {
-                for (let r of attackResults) {
-                    if (r.vulnerable) {
-                        if (r.type === "sqli") riskScore += 50;
-                        else if (r.type === "xss") riskScore += 30;
-                        else riskScore += 10;
-                    }
+            for (let r of attackResults) {
+                if (r?.vulnerable) {
+                    if (r.type === "sqli") riskScore += 50;
+                    else if (r.type === "xss") riskScore += 30;
+                    else riskScore += 10;
                 }
             }
 
@@ -101,27 +147,48 @@ const fullScan = async (req, res) => {
                 risk_score: riskScore,
                 risk_level: riskLevel,
                 summary: {
-                    total: Array.isArray(attackResults) ? attackResults.length : 0,
-                    vulnerabilities: Array.isArray(attackResults)
-                        ? attackResults.filter(r => r.vulnerable).length
-                        : 0
+                    total: attackResults.length,
+                    vulnerabilities: attackResults.filter(r => r?.vulnerable).length
                 },
-                findings: Array.isArray(attackResults)
-                    ? attackResults.map(r => ({
-                        type: r.type,
-                        status: r.vulnerable ? "VULNERABLE" : "SAFE",
-                        severity: r.type === "sqli" ? "HIGH" : "LOW",
-                        technique: r.technique || null,
-                        parameter: r.param || null,
-                        payload: r.payload || null
-                    }))
-                    : []
+                findings: attackResults
+                    .filter(r => r?.vulnerable)
+                    .map(r => {
+                        let explanation = null;
+                        let recommendation = null;
+
+                        if (r.type === "sqli") {
+                            explanation = "SQL Injection allows attackers to manipulate database queries.";
+                            recommendation = "Use prepared statements and parameterized queries.";
+                        } else if (r.type === "xss") {
+                            explanation = "XSS allows injection of malicious scripts into web pages.";
+                            recommendation = "Sanitize inputs and implement CSP.";
+                        }
+
+                        return {
+                            type: r.type,
+                            status: "VULNERABLE",
+                            severity:
+                                r.type === "sqli"
+                                    ? "HIGH"
+                                    : r.type === "xss"
+                                    ? "MEDIUM"
+                                    : "LOW",
+                            technique: r.technique || null,
+                            parameter: r.param || null,
+                            payload: r.payload || null,
+                            explanation,
+                            recommendation
+                        };
+                    })
             };
 
-            updateScan(scanId, {
-                stage: "completed",
-                progress: 100,
-                result: formattedResults
+            console.log("📊 Final Report:", formattedResults);
+
+            // ---------------- COMPLETE ----------------
+           updateScan(scanId, {
+            stage: "completed",
+            progress: 100,
+            result: formattedResults
             });
 
             const duration = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -154,7 +221,7 @@ const getScanStatus = (req, res) => {
         });
     }
 
-    return res.json({
+    res.json({
         success: true,
         scan
     });
